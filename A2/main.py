@@ -61,9 +61,7 @@ def fisher_info(distribution_function, args, delta=1e-6, N=10000, x_range=(0,20)
 	for i in range(len(args)):
 		args_plus = args.copy()
 		args_plus[i] += delta
-		args_minus = args.copy()
-		args_minus[i] -= delta
-		score[i] = (log(distribution_function(x_values, *args_plus)) - log(distribution_function(x_values, *args_minus))) / (2*delta)
+		score[i] = (log(distribution_function(x_values, *args_plus)) - log(distribution)) / delta
 		score[i] *= distribution
 	result = zeros((len(args), len(args)))
 	for i in range(len(args)):
@@ -79,15 +77,17 @@ print("H0: there is no second exponential distribution")
 # lmd1 is the parameter for an additional exponential distribution.
 # height1 * (1-normal_height) is its height.
 # (1-height1) * (1-normal_height) is the height of the original exponential distribution.
-def fit_distribution_alternative(x, lmd, sgm, mu, normal_height, lmd1, height1):
+def fit_distribution_alternative(x, lmd, sgm, mu, normal_height, height1, lmd1):
 	exponential = exp(-x/lmd)/lmd
 	normal = exp(-(x-mu)**2/2/sgm**2)/sqrt(2*pi)/sgm
 	exponential1 = exp(-x/lmd1)/lmd1
 	return (1-normal_height)*(1-height1)*exponential + normal_height*normal + (1-normal_height)*height1*exponential1
 
-popt, pcov = curve_fit(fit_distribution_alternative, bin_centers, hist, p0=[1.25, 1, 6, 0.2, 1, 0])
-z_score = popt[4] / sqrt(pcov[4, 4])
-p_value = erf(z_score/sqrt(2))
+mle_result = minimize(mle_estimator, [1.25, 1, 6, 0.2, 0, 1], args=(fit_distribution_alternative,), bounds=[(0, None), (0, None), (None, None), (0, 1), (0, 1), (0, None)])
+cov_matrix = inv(fisher_info(fit_distribution_alternative, mle_result.x)[:5, :5]) # truncate Fisher info matrix so that it's not singular
+mean, variance = mle_result.x[4], cov_matrix[4, 4]
+print("mean and variance of MLE estimate of height1:", mean, variance)
+p_value = 1-erf(abs(mean)/sqrt(variance)/sqrt(2))
 print("p-value:", p_value)
 if p_value < 0.05:
 	print("Reject H0")
@@ -95,4 +95,3 @@ elif p_value > 0.95:
 	print("Accept H0")
 else:
 	print("Cannot make a decision")
-
